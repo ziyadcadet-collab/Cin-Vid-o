@@ -224,7 +224,7 @@ input[type=text]:focus{border-color:var(--purple);}
     </div>
   </div>
   <div class="header-right">
-    <span class="hpill hp-ai">5 APIs</span>
+    <span class="hpill hp-ai">6 APIs</span>
     <span class="hpill hp-tt">9:16 TikTok</span>
   </div>
 </header>
@@ -262,8 +262,29 @@ input[type=text]:focus{border-color:var(--purple);}
         <input class="key-input" type="password" id="k-eleven" placeholder="xi-..." oninput="checkKey('eleven',this.value)">
         <a class="key-link" href="https://elevenlabs.io" target="_blank">↗</a>
       </div>
+      <div class="key-row">
+        <div class="key-dot" id="dot-higgs"></div>
+        <span class="key-name" style="color:var(--cyan)">Higgsfield <span class="badge badge-opt">OPT</span></span>
+        <input class="key-input" type="password" id="k-higgs" placeholder="hf-..." oninput="checkKey('higgs',this.value)">
+        <a class="key-link" href="https://higgsfield.ai" target="_blank">↗</a>
+      </div>
     </div>
-    <div class="hint" style="margin-top:8px">Sans Runway/ElevenLabs : images fixes + voix navigateur (gratuit).</div>
+    <div class="hint" style="margin-top:8px">Higgsfield remplace DALL·E (images) et Runway (vidéo) si clé fournie.</div>
+  </div>
+
+  <!-- FOURNISSEUR IA -->
+  <div class="sec">
+    <div class="lbl">Fournisseur images IA</div>
+    <div class="cfg-grid" id="imgProvGrid">
+      <div class="cfg-btn on" data-v="dalle" onclick="pick(this,'imgProv')"><span class="ci">🎨</span>DALL·E 3<br><small style="font-size:9px;color:var(--mut)">OpenAI</small></div>
+      <div class="cfg-btn" data-v="higgs" onclick="pick(this,'imgProv')"><span class="ci">⚡</span>Nano Banana Pro<br><small style="font-size:9px;color:var(--cyan)">Higgsfield</small></div>
+    </div>
+    <div class="lbl" style="margin-top:10px">Fournisseur vidéo IA</div>
+    <div class="cfg-grid" id="vidProvGrid">
+      <div class="cfg-btn on" data-v="runway" onclick="pick(this,'vidProv')"><span class="ci">🎬</span>Runway<br><small style="font-size:9px;color:var(--mut)">Gen-3</small></div>
+      <div class="cfg-btn" data-v="higgs_grok" onclick="pick(this,'vidProv')"><span class="ci">🚀</span>Grok Video<br><small style="font-size:9px;color:var(--cyan)">Higgsfield</small></div>
+      <div class="cfg-btn" data-v="higgs_seed" onclick="pick(this,'vidProv')"><span class="ci">🌱</span>Seedance 2<br><small style="font-size:9px;color:var(--cyan)">Higgsfield</small></div>
+    </div>
   </div>
 
   <!-- IDEA -->
@@ -480,10 +501,12 @@ const CFG = {
   style: 'realistic',
   music: 'dramatic',
   dur: 45,
-  scenes: 5
+  scenes: 5,
+  imgProv: 'dalle',
+  vidProv: 'runway'
 };
 
-const KEYS = { claude:'', openai:'', runway:'', eleven:'' };
+const KEYS = { claude:'', openai:'', runway:'', eleven:'', higgs:'' };
 let generatedScenes = [];
 let history = JSON.parse(localStorage.getItem('cineia_history') || '[]');
 let recBlob = null;
@@ -516,11 +539,15 @@ document.getElementById('sceneSl').addEventListener('input', function() {
 function updateCostHint() {
   const hasRunway = KEYS.runway.length > 5;
   const hasEleven = KEYS.eleven.length > 5;
+  const hasHiggs = KEYS.higgs.length > 5;
   const base = 0.05 + CFG.scenes * 0.04;
-  const runway = hasRunway ? CFG.scenes * 0.10 : 0;
+  const vidCost = (CFG.vidProv === 'runway' && hasRunway) ? CFG.scenes * 0.10 : (hasHiggs && CFG.vidProv.startsWith('higgs')) ? CFG.scenes * 0.08 : 0;
+  const imgCost = (CFG.imgProv === 'higgs' && hasHiggs) ? CFG.scenes * 0.03 : CFG.scenes * 0.04;
   const eleven = hasEleven ? 0.10 : 0;
-  const total = (base + runway + eleven).toFixed(2);
-  document.getElementById('costHint').textContent = `~${total}€ par vidéo · ${CFG.scenes} scènes · ${CFG.dur}s`;
+  const total = (base + vidCost + imgCost + eleven).toFixed(2);
+  const imgLabel = CFG.imgProv === 'higgs' ? '⚡ Higgsfield img' : '🎨 DALL·E 3';
+  const vidLabel = CFG.vidProv === 'runway' ? '🎬 Runway' : CFG.vidProv === 'higgs_grok' ? '🚀 Grok Video' : CFG.vidProv === 'higgs_seed' ? '🌱 Seedance 2' : 'images fixes';
+  document.getElementById('costHint').textContent = `~${total}€ · ${imgLabel} · ${vidLabel}`;
 }
 
 // ── Keys ──
@@ -537,6 +564,7 @@ function pick(el, group) {
   if (grid) grid.querySelectorAll('.cfg-btn').forEach(b => b.classList.remove('on'));
   el.classList.add('on');
   CFG[group] = el.dataset.v;
+  updateCostHint();
 }
 
 function setIdea(el) {
@@ -567,7 +595,8 @@ function switchTab(name) {
 // ══════════════════════════════════════════════════════
 async function startGeneration() {
   if (!KEYS.claude) { toast('Clé Claude manquante', 'err'); return; }
-  if (!KEYS.openai) { toast('Clé OpenAI manquante', 'err'); return; }
+  if (!KEYS.openai && CFG.imgProv === 'dalle') { toast('Clé OpenAI manquante (ou active Higgsfield)', 'err'); return; }
+  if (!KEYS.higgs && CFG.imgProv === 'higgs') { toast('Clé Higgsfield manquante', 'err'); return; }
   const idea = document.getElementById('ideaInput').value.trim();
   if (!idea) { toast('Décris ton idée de film !', 'err'); return; }
 
@@ -584,10 +613,13 @@ async function startGeneration() {
   switchTab('progress');
 
   // Init progress steps
+  const imgProvLabel = CFG.imgProv === 'higgs' ? 'Higgsfield Nano Banana Pro' : 'DALL·E 3';
+  const vidProvLabel = CFG.vidProv === 'higgs_grok' ? 'Higgsfield Grok Video' : CFG.vidProv === 'higgs_seed' ? 'Higgsfield Seedance 2.0' : 'Runway Gen-3';
+  const hasVidKey = CFG.vidProv === 'runway' ? KEYS.runway.length > 5 : KEYS.higgs.length > 5;
   const steps = [
     { id:'script', name:'Script IA (Claude)', detail:'Génération du scénario, dialogues et découpage' },
-    { id:'images', name:'Images IA (DALL·E 3)', detail:`${CFG.scenes} scènes × 1 image = ${CFG.scenes} images` },
-    { id:'video',  name:'Animation vidéo (Runway)', detail:KEYS.runway ? `${CFG.scenes} clips de ${Math.round(CFG.dur/CFG.scenes)}s` : '⚠ Pas de clé Runway — images fixes utilisées' },
+    { id:'images', name:`Images IA (${imgProvLabel})`, detail:`${CFG.scenes} scènes × 1 image = ${CFG.scenes} images` },
+    { id:'video',  name:`Animation vidéo (${vidProvLabel})`, detail: hasVidKey ? `${CFG.scenes} clips de ${Math.round(CFG.dur/CFG.scenes)}s` : '⚠ Pas de clé vidéo — images fixes utilisées' },
     { id:'voice',  name:'Voix IA (ElevenLabs)', detail:KEYS.eleven ? 'Narration générée par ElevenLabs' : 'Voix navigateur (Web Speech API)' },
     { id:'mix',    name:'Mixage & montage final', detail:'Assemblage clips + audio + texte + sous-titres' },
   ];
@@ -603,18 +635,29 @@ async function startGeneration() {
     log('Script généré : ' + script.title);
 
     // ── ÉTAPE 2 : IMAGES ──
-    setStep('images', 'run', 'DALL·E 3 génère les images…');
+    const imgLabel2 = CFG.imgProv === 'higgs' ? 'Higgsfield génère les images…' : 'DALL·E 3 génère les images…';
+    setStep('images', 'run', imgLabel2);
     initSceneCards(script.scenes);
-    const images = await generateImages(script.scenes);
+    const images = CFG.imgProv === 'higgs' ? await generateImagesHiggs(script.scenes) : await generateImages(script.scenes);
     setStep('images', 'ok', `${images.filter(Boolean).length}/${script.scenes.length} images OK`);
     setProg(50);
 
-    // ── ÉTAPE 3 : VIDEO (Runway si dispo, sinon images fixes) ──
-    setStep('video', 'run', KEYS.runway ? 'Runway anime les scènes…' : 'Mode image fixe (pas de clé Runway)');
-    const clips = KEYS.runway
-      ? await animateWithRunway(script.scenes, images)
-      : images; // fallback : images fixes
-    setStep('video', 'ok', KEYS.runway ? `${clips.filter(Boolean).length} clips animés` : 'Images fixes — ajoute une clé Runway pour animer');
+    // ── ÉTAPE 3 : VIDEO ──
+    const hasVidKey2 = CFG.vidProv === 'runway' ? KEYS.runway.length > 5 : KEYS.higgs.length > 5;
+    let vidRunLabel = 'Mode image fixe';
+    if (CFG.vidProv === 'runway' && KEYS.runway) vidRunLabel = 'Runway anime les scènes…';
+    if (CFG.vidProv === 'higgs_grok' && KEYS.higgs) vidRunLabel = 'Higgsfield Grok Video anime…';
+    if (CFG.vidProv === 'higgs_seed' && KEYS.higgs) vidRunLabel = 'Higgsfield Seedance 2 anime…';
+    setStep('video', 'run', vidRunLabel);
+    let clips;
+    if (CFG.vidProv === 'runway' && KEYS.runway) {
+      clips = await animateWithRunway(script.scenes, images);
+    } else if ((CFG.vidProv === 'higgs_grok' || CFG.vidProv === 'higgs_seed') && KEYS.higgs) {
+      clips = await animateWithHiggs(script.scenes, images);
+    } else {
+      clips = images;
+    }
+    setStep('video', 'ok', hasVidKey2 ? `${clips.filter(Boolean).length} clips animés` : 'Images fixes — ajoute une clé vidéo pour animer');
     setProg(70);
 
     // ── ÉTAPE 4 : VOIX ──
@@ -785,6 +828,119 @@ async function generateImages(scenes) {
     }
   }
   return images;
+}
+
+// ══════════════════════════════════════════════════════
+//  HIGGSFIELD : IMAGES (Nano Banana Pro)
+// ══════════════════════════════════════════════════════
+async function generateImagesHiggs(scenes) {
+  const images = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const sc = scenes[i];
+    updateSceneCard(i, 'run', '⚡ Higgsfield génère image…');
+    log(`Higgsfield image ${i+1}/${scenes.length}…`);
+    try {
+      const res = await fetch('https://api.higgsfield.ai/v1/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEYS.higgs },
+        body: JSON.stringify({ model: 'nano_banana_pro', prompt: sc.image_prompt + ' Vertical 9:16 portrait. No text, no watermarks.', aspect_ratio: '9:16', count: 1 })
+      });
+      if (!res.ok) { const e = await res.json(); throw new Error(e.error?.message || e.message || 'Higgsfield img error ' + res.status); }
+      const data = await res.json();
+      const jobId = data.id || data.job_id;
+      // Poll job
+      let url = null;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await sleep(2500);
+        const poll = await fetch(`https://api.higgsfield.ai/v1/generations/${jobId}`, {
+          headers: { 'Authorization': 'Bearer ' + KEYS.higgs }
+        });
+        const status = await poll.json();
+        log(`Higgsfield img ${i+1} : ${status.status}`);
+        if (status.status === 'completed' || status.status === 'SUCCEEDED') {
+          url = status.output?.[0]?.url || status.output?.[0] || status.url;
+          break;
+        }
+        if (status.status === 'failed' || status.status === 'FAILED') throw new Error('Higgsfield img failed');
+      }
+      if (!url) throw new Error('Higgsfield img timeout');
+      images.push(url);
+      const img = new Image(); img.crossOrigin = 'anonymous';
+      await new Promise(ok => { img.onload = ok; img.onerror = () => ok(); img.src = url; });
+      scenes[i]._img = img;
+      updateSceneCard(i, 'ok', '✓ Image Higgsfield', url);
+      log(`Higgsfield img ${i+1} OK`);
+    } catch(e) {
+      images.push(null);
+      updateSceneCard(i, 'err', '✗ Higgsfield img erreur');
+      log(`Higgsfield img ${i+1} ERREUR : ${e.message}`);
+    }
+  }
+  return images;
+}
+
+// ══════════════════════════════════════════════════════
+//  HIGGSFIELD : VIDÉO (Grok Video 1.5 / Seedance 2.0)
+// ══════════════════════════════════════════════════════
+async function animateWithHiggs(scenes, imageUrls) {
+  const model = CFG.vidProv === 'higgs_seed' ? 'seedance_2_0' : 'grok_video_v15';
+  const clips = [];
+  for (let i = 0; i < scenes.length; i++) {
+    const sc = scenes[i];
+    const imgUrl = imageUrls[i];
+    if (!imgUrl) { clips.push(null); continue; }
+    updateSceneCard(i, 'run', `🚀 Higgsfield ${model === 'seedance_2_0' ? 'Seedance' : 'Grok'}…`);
+    log(`Higgsfield video ${i+1}/${scenes.length} (${model})…`);
+    try {
+      // Import URL → media_id via Higgsfield
+      const importRes = await fetch('https://api.higgsfield.ai/v1/media/import', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEYS.higgs },
+        body: JSON.stringify({ url: imgUrl })
+      });
+      if (!importRes.ok) throw new Error('Higgsfield media import ' + importRes.status);
+      const importData = await importRes.json();
+      const mediaId = importData.id || importData.media_id;
+
+      const role = model === 'seedance_2_0' ? 'start_image' : 'start_image';
+      const genRes = await fetch('https://api.higgsfield.ai/v1/generations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + KEYS.higgs },
+        body: JSON.stringify({
+          model,
+          prompt: sc.video_prompt || 'Cinematic camera movement, subtle motion',
+          aspect_ratio: '9:16',
+          duration: Math.min(10, Math.max(4, sc.duration || 5)),
+          medias: [{ role, value: mediaId }]
+        })
+      });
+      if (!genRes.ok) { const e = await genRes.json(); throw new Error(e.error?.message || e.message || 'Higgsfield vid error ' + genRes.status); }
+      const genData = await genRes.json();
+      const jobId = genData.id || genData.job_id;
+
+      let clip = null;
+      for (let attempt = 0; attempt < 40; attempt++) {
+        await sleep(4000);
+        const poll = await fetch(`https://api.higgsfield.ai/v1/generations/${jobId}`, {
+          headers: { 'Authorization': 'Bearer ' + KEYS.higgs }
+        });
+        const status = await poll.json();
+        log(`Higgsfield vid ${i+1} : ${status.status}`);
+        if (status.status === 'completed' || status.status === 'SUCCEEDED') {
+          clip = status.output?.[0]?.url || status.output?.[0];
+          break;
+        }
+        if (status.status === 'failed' || status.status === 'FAILED') throw new Error('Higgsfield vid failed');
+      }
+      clips.push(clip);
+      updateSceneCard(i, 'ok', '✓ Clip Higgsfield prêt');
+    } catch(e) {
+      clips.push(null);
+      updateSceneCard(i, 'err', '✗ Higgsfield vid — image fixe');
+      log(`Higgsfield vid ${i+1} ERREUR : ${e.message}`);
+    }
+  }
+  return clips;
 }
 
 // ══════════════════════════════════════════════════════
